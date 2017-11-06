@@ -150,11 +150,12 @@ module ProcessTools =
                         print outChar
                         flush()
 
+                    let leChar = outChar.[uniqueElementIndexInTheSingleCharBuffer]
+                    let newBuilder = new StringBuilder(leChar.ToString())
+                    let newBlock = { OutputType = std; Chunk = newBuilder }
+
                     lock outputBufferLock (fun _ ->
 
-                        let leChar = outChar.[uniqueElementIndexInTheSingleCharBuffer]
-                        let newBuilder = new StringBuilder(leChar.ToString())
-                        let newBlock = { OutputType = std; Chunk = newBuilder }
                         match outputBuffer with
                         | [] ->
                             outputBuffer <- [ newBlock ]
