@@ -56,3 +56,5 @@ if (allCompile) then
 else
     Console.WriteLine("Some script(s) had errors")
     Environment.Exit(1)
+
+

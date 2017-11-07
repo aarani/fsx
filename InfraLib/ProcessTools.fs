@@ -31,6 +31,7 @@ module ProcessTools =
             Monitor.PulseAll(innerLock)
             Monitor.Exit(innerLock)
 
+
     type Standard =
         | Output
         | Error
@@ -106,6 +107,7 @@ module ProcessTools =
 
         // I know, this shit below is mutable, but it's a consequence of dealing with .NET's Process class' events?
         let mutable outputBuffer: list<OutputChunk> = []
+//        let outputBufferLock = new Object()
         let outputBufferLock = new QueuedLock()
 
         if (echo = Echo.All) then
@@ -118,6 +120,7 @@ module ProcessTools =
         startInfo.RedirectStandardError <- true
         use proc = new System.Diagnostics.Process()
         proc.StartInfo <- startInfo
+
 
         let ReadStandard(std: Standard) =
 
@@ -157,12 +160,17 @@ module ProcessTools =
                 if not (outChar.Length = bufferSize) then
                     failwith "Buffer Size must equal current buffer size"
 
-                let readTask = outputToReadFrom.ReadAsync(outChar, uniqueElementIndexInTheSingleCharBuffer, bufferSize)
-                readTask.Wait()
-                if not (readTask.IsCompleted) then
-                    failwith "Failed to read"
+                let readCount = outputToReadFrom(outChar, uniqueElementIndexInTheSingleCharBuffer, bufferSize)
+//                    let readTask = outputToReadFrom.ReadAsync(outChar, uniqueElementIndexInTheSingleCharBuffer, bufferSize)
+//                  Console.WriteLine("about to wait")
+//                    readTask.Wait()
+//                  Console.WriteLine("finished wait")
+//                    if not (readTask.IsCompleted) then
+//                        failwith "Failed to read"
 
-                let readCount = readTask.Result
+//                    let readCount = readTask.Result
+
+                //dupe
                 if (readCount > bufferSize) then
                     failwith "StreamReader.Read() should not read more than the bufferSize if we passed the bufferSize as a parameter"
 
@@ -190,40 +198,49 @@ module ProcessTools =
                                 outputBuffer <- newBlock::outputBuffer
                         Some(leChar)
 
-                let readerState =
-                    if (EndOfStream(readCount)) then
-                        End
-                    else
-                        match readChar with
-                        | Some('\n') ->
-                            Pause
-                        | Some(aChar) ->
-                            Continue
-                        | None ->
-                            failwith "readChar=None should have been EndOfStream"
-                readerState
+                    let readerState =
+                        if (EndOfStream(readCount)) then
+//                            Console.WriteLine("end!" + std.ToString())
+                            End
+                        else
+                            match readChar with
+                            | Some('\n') ->
+//                              Console.WriteLine("pause!" + std.ToString())
+                                Pause
+                            | Some(aChar) ->
+//                              Console.WriteLine("__________________" + aChar.ToString() + " continue!" + std.ToString())
+                                Continue
+                            | None ->
+                                failwith "readChar=None should have been EndOfStream"
+                    readerState
 
             let rec Loop(enter: bool) =
                 if (enter) then
+//                    Console.WriteLine("ENTER" + std.ToString())
+//                    Monitor.Enter(outputBufferLock)
                       outputBufferLock.Enter()
 
                 match ReadIteration() with
                 | Continue ->
                     Loop false
                 | End ->
+//                    Console.WriteLine("EXIT FOREVER" + std.ToString())
+                    //Monitor.Exit(outputBufferLock)
                     outputBufferLock.Exit()
                 | Pause ->
+//                    Console.WriteLine("EXIT NOW" + std.ToString())
+//                    Monitor.Exit(outputBufferLock)
                     outputBufferLock.Exit()
                     Loop true
 
             Loop true
 
-        let outReaderThread = new Thread(new ThreadStart(fun _ ->
-            ReadStandard(Standard.Output)
-        ))
-
         let errReaderThread = new Thread(new ThreadStart(fun _ ->
             ReadStandard(Standard.Error)
+        ))
+
+        let outReaderThread = new Thread(new ThreadStart(fun _ ->
+            ReadStandard(Standard.Output)
         ))
 
         try
