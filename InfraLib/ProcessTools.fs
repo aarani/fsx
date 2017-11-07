@@ -160,7 +160,7 @@ module ProcessTools =
                 if not (outChar.Length = bufferSize) then
                     failwith "Buffer Size must equal current buffer size"
 
-                let readCount = outputToReadFrom(outChar, uniqueElementIndexInTheSingleCharBuffer, bufferSize)
+                let readCount = outputToReadFrom.Read(outChar, uniqueElementIndexInTheSingleCharBuffer, bufferSize)
 //                    let readTask = outputToReadFrom.ReadAsync(outChar, uniqueElementIndexInTheSingleCharBuffer, bufferSize)
 //                  Console.WriteLine("about to wait")
 //                    readTask.Wait()
@@ -198,21 +198,21 @@ module ProcessTools =
                                 outputBuffer <- newBlock::outputBuffer
                         Some(leChar)
 
-                    let readerState =
-                        if (EndOfStream(readCount)) then
-//                            Console.WriteLine("end!" + std.ToString())
-                            End
-                        else
-                            match readChar with
-                            | Some('\n') ->
-//                              Console.WriteLine("pause!" + std.ToString())
-                                Pause
-                            | Some(aChar) ->
-//                              Console.WriteLine("__________________" + aChar.ToString() + " continue!" + std.ToString())
-                                Continue
-                            | None ->
-                                failwith "readChar=None should have been EndOfStream"
-                    readerState
+                let readerState =
+                    if (EndOfStream(readCount)) then
+//                      Console.WriteLine("end!" + std.ToString())
+                        End
+                    else
+                        match readChar with
+                        | Some('\n') ->
+//                          Console.WriteLine("pause!" + std.ToString())
+                            Pause
+                        | Some(aChar) ->
+//                          Console.WriteLine("__________________" + aChar.ToString() + " continue!" + std.ToString())
+                            Continue
+                        | None ->
+                            failwith "readChar=None should have been EndOfStream"
+                readerState
 
             let rec Loop(enter: bool) =
                 if (enter) then
