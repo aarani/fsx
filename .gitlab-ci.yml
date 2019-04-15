@@ -26,3 +26,10 @@ test:
     - make install
     - ./test.fsx
     - ./testProcessToolsConcurrency.fsx
+
+snaptest:
+  script:
+    - curl -L https://gitlab.com/sonawane.manoj/fsx/-/jobs/196471691/artifacts/download -O
+    - mv download download.zip
+    - unzip download.zip
+    - snap install --dangerous fsx_master
