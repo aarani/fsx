@@ -4,12 +4,12 @@ set -euxo pipefail
 apt install -y curl jq squashfs-tools
 
 # Grab the core snap from the stable channel and unpack it in the proper place
-curl -L $(curl -H 'X-Ubuntu-Series: 16' 'https://api.snapcraft.io/api/v1/snaps/details/core' | jq '.download_url' -r) --output core.snap
+curl -L $(curl -H 'X-Ubuntu-Series: 20' 'https://api.snapcraft.io/api/v1/snaps/details/core' | jq '.download_url' -r) --output core.snap
 mkdir -p /snap/core
 unsquashfs -d /snap/core/current core.snap
 
 # Grab the snapcraft snap from the stable channel and unpack it in the proper place
-curl -L $(curl -H 'X-Ubuntu-Series: 16' 'https://api.snapcraft.io/api/v1/snaps/details/snapcraft?channel=stable' | jq '.download_url' -r) --output snapcraft.snap
+curl -L $(curl -H 'X-Ubuntu-Series: 20' 'https://api.snapcraft.io/api/v1/snaps/details/snapcraft?channel=stable' | jq '.download_url' -r) --output snapcraft.snap
 mkdir -p /snap/snapcraft
 unsquashfs -d /snap/snapcraft/current snapcraft.snap
 
