@@ -41,11 +41,41 @@ let GetIdealNugetVersion (initialVersion: string) =
                                initialVersion dateSegment gitSegment
     finalVersion
 
+let DoesDotnetSDKExists() = 
+    try
+        let dotnetVersionCmd =
+            {
+                Command = "dotnet"
+                Arguments = "--version"
+            }
+        Process.SafeExecute (dotnetVersionCmd, Echo.All) |> ignore 
+        true
+    with
+        :?  ProcessCouldNotStart -> false
+
+let DownloadNugetIfNotExists() =
+    let rootDir = DirectoryInfo(Path.Combine(__SOURCE_DIRECTORY__, // Tools/
+                                         "..",                 // fsx root
+                                         "..")                 // repo root
+                           )
+    let nugetTargetDir = Path.Combine(rootDir.FullName, ".nuget") |> DirectoryInfo
+    if not nugetTargetDir.Exists then
+        nugetTargetDir.Create()
+    let prevCurrentDir = Directory.GetCurrentDirectory()
+    Directory.SetCurrentDirectory nugetTargetDir.FullName
+    let nugetDownloadUri = Uri "https://dist.nuget.org/win-x86-commandline/v4.5.1/nuget.exe"
+    Network.DownloadFile nugetDownloadUri |> ignore
+    let nugetExe = Path.Combine(nugetTargetDir.FullName, "nuget.exe") |> FileInfo
+    Directory.SetCurrentDirectory prevCurrentDir
+
+    nugetExe.FullName
+
 let FindOrGenerateNugetPackages (): seq<FileInfo> =
     let rootDir = DirectoryInfo(Path.Combine(__SOURCE_DIRECTORY__, // Tools/
                                              "..",                 // fsx root
                                              "..")                 // repo root
                                )
+
     let nuspecFiles = rootDir.EnumerateFiles "*.nuspec"
     if nuspecFiles.Any() then
         if args.Length < 1 then
@@ -53,26 +83,18 @@ let FindOrGenerateNugetPackages (): seq<FileInfo> =
             Environment.Exit 1
         let baseVersion = args.First()
 
-        // we need to download nuget.exe because `dotnet pack` doesn't support using standalone (i.e.
-        // without a project association) .nuspec files, see https://github.com/NuGet/Home/issues/4254
-        let nugetTargetDir = Path.Combine(rootDir.FullName, ".nuget") |> DirectoryInfo
-        if not nugetTargetDir.Exists then
-            nugetTargetDir.Create()
-        let prevCurrentDir = Directory.GetCurrentDirectory()
-        Directory.SetCurrentDirectory nugetTargetDir.FullName
-        let nugetDownloadUri = Uri "https://dist.nuget.org/win-x86-commandline/v4.5.1/nuget.exe"
-        Network.DownloadFile nugetDownloadUri |> ignore
-        let nugetExe = Path.Combine(nugetTargetDir.FullName, "nuget.exe") |> FileInfo
-        Directory.SetCurrentDirectory prevCurrentDir
-
         seq {
             for nuspecFile in nuspecFiles do
                 let packageName = Path.GetFileNameWithoutExtension nuspecFile.FullName
 
                 let nugetVersion = GetIdealNugetVersion baseVersion
+                
+                // we need to download nuget.exe here because `dotnet pack` doesn't support using standalone (i.e.
+                // without a project association) .nuspec files, see https://github.com/NuGet/Home/issues/4254
+                
                 let nugetPackCmd =
                     {
-                        Command = nugetExe.FullName
+                        Command = DownloadNugetIfNotExists()
                         Arguments = sprintf "pack %s -Version %s"
                                             nuspecFile.FullName nugetVersion
                     }
@@ -92,13 +114,16 @@ let FindOrGenerateNugetPackages (): seq<FileInfo> =
             let baseVersion = args.First()
             let nugetVersion = GetIdealNugetVersion baseVersion
 
-            let dotnetPackCmd =
-                {
-                    Command = "dotnet"
-                    Arguments = sprintf "pack -c Release -p:Version=%s"
-                                        nugetVersion
-                }
-            Process.SafeExecute (dotnetPackCmd, Echo.All) |> ignore
+            if DoesDotnetSDKExists() then
+                let dotnetPackCmd =
+                    {
+                        Command = "dotnet"
+                        Arguments = sprintf "pack -c Release -p:Version=%s"
+                                            nugetVersion
+                    }
+                Process.SafeExecute (dotnetPackCmd, Echo.All) |> ignore
+            else 
+                failwith "Please install .NET SDK to build nuget packages without nuspec file"
 
         FindNugetPackages()
 
@@ -106,13 +131,22 @@ let FindOrGenerateNugetPackages (): seq<FileInfo> =
 let NugetUpload (packageFile: FileInfo) (nugetApiKey: string) =
 
     let defaultNugetFeedUrl = "https://api.nuget.org/v3/index.json"
-    let nugetPushCmd =
-        {
-            Command = "dotnet"
-            Arguments = sprintf "nuget push %s -k %s -s %s"
-                                packageFile.FullName nugetApiKey defaultNugetFeedUrl
-        }
-    Process.SafeExecute (nugetPushCmd, Echo.All) |> ignore
+    if DoesDotnetSDKExists() then
+        let nugetPushCmd =
+            {
+                Command = "dotnet"
+                Arguments = sprintf "nuget push %s -k %s -s %s"
+                                    packageFile.FullName nugetApiKey defaultNugetFeedUrl
+            }
+        Process.SafeExecute (nugetPushCmd, Echo.All) |> ignore
+    else 
+        let nugetPushCmd =
+            {
+                Command = DownloadNugetIfNotExists()
+                Arguments = sprintf "push %s -ApiKey %s -Source %s"
+                                    packageFile.FullName nugetApiKey defaultNugetFeedUrl
+            }
+        Process.SafeExecute (nugetPushCmd, Echo.All) |> ignore
 
 if args.Length > 0 && args.[0] = "--output-version" then
     if args.Length < 2 then
@@ -150,4 +184,3 @@ if not (IsMasterBranch()) then
 
 for nugetPkg in nugetPkgs do
     NugetUpload nugetPkg nugetApiKey
-
